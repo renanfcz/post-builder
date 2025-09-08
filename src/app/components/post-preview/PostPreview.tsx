@@ -1,10 +1,9 @@
 'use client';
 
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CopyButton } from './CopyButton';
-import { extractHashtags, truncatePost } from '@/lib/utils';
-import { FileText, Hash, TrendingUp } from 'lucide-react';
+import { extractHashtags } from '@/lib/utils';
+import { FileText, Hash } from 'lucide-react';
 
 interface PostPreviewProps {
   content: string | null;
