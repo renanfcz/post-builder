@@ -84,9 +84,9 @@ export function isIdentityValid(identity: UserIdentity): boolean {
   const now = Date.now()
   const maxAge = 30 * 24 * 60 * 60 * 1000 // 30 days
   
-  return identity.uuid && 
+  return Boolean(identity.uuid && 
          identity.fingerprint && 
          identity.sessionId && 
          identity.compositeId &&
-         (now - identity.createdAt.getTime()) < maxAge
+         (now - identity.createdAt.getTime()) < maxAge)
 }

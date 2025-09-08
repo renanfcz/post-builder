@@ -43,7 +43,7 @@ export const useChat = (webhookUrl?: string): UseChatReturn => {
     setError(null);
 
     // Add user message immediately
-    const userMessage = addMessage({
+    addMessage({
       content: content.trim(),
       role: 'user',
     });

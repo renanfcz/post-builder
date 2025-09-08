@@ -2,10 +2,10 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { WebhookClient } from '@/lib/webhook';
-import { WebhookRequest, WebhookResponse } from '@/lib/types';
+import { WebhookRequest, ProcessedWebhookResponse } from '@/lib/types';
 
 export interface UseWebhookReturn {
-  sendMessage: (message: string, context?: Record<string, any>) => Promise<WebhookResponse>;
+  sendMessage: (message: string, context?: Record<string, any>) => Promise<ProcessedWebhookResponse>;
   isLoading: boolean;
   error: string | null;
   clearError: () => void;
@@ -14,7 +14,7 @@ export interface UseWebhookReturn {
 export const useWebhook = (webhookUrl?: string): UseWebhookReturn => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const clientRef = useRef<WebhookClient>();
+  const clientRef = useRef<WebhookClient | undefined>(undefined);
 
   // Initialize or update webhook client
   if (!clientRef.current || (webhookUrl && clientRef.current)) {
@@ -23,7 +23,7 @@ export const useWebhook = (webhookUrl?: string): UseWebhookReturn => {
 
   const sendMessage = useCallback(async (
     message: string, 
-  ): Promise<WebhookResponse> => {
+  ): Promise<ProcessedWebhookResponse> => {
     if (!clientRef.current) {
       throw new Error('Webhook client not initialized');
     }
