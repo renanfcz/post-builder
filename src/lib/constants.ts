@@ -3,8 +3,8 @@ export const WEBHOOK_CONFIG = {
   DEFAULT_URL: '/api/webhook',
   EXTERNAL_URL: process.env.NEXT_PUBLIC_WEBHOOK_URL || 'http://localhost:3001/webhook',
   SECRET: process.env.NEXT_PUBLIC_SECRET || '',
-  TIMEOUT: 120000, // 120 seconds
-  RETRIES: 3,
+  TIMEOUT: 300000, // 300 seconds
+  RETRIES: 2,
 } as const;
 
 export const CHAT_CONFIG = {
