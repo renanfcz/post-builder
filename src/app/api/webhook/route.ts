@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { WEBHOOK_CONFIG } from '@/lib/constants'
 
+// Configure route timeout to 60 seconds
+export const maxDuration = 60
+
 export async function POST(request: NextRequest) {
   let body: any = { message: 'mensagem vazia' }
   
@@ -27,6 +30,7 @@ export async function POST(request: NextRequest) {
         secret: process.env.NEXT_PUBLIC_SECRET || '',
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(55000), // 55 seconds timeout for the fetch
     });
 
     if (!response.ok) {
