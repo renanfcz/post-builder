@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useChatQuery } from '@/hooks/use-chat-query';
 import { MessageBubble } from './MessageBubble';
 import { InputArea } from './InputArea';
-// import { LoadingIndicator } from './LoadingIndicator';
-import { MessageSkeleton } from '@/components/loading-fallback';
+import { ProgressIndicator } from './ProgressIndicator';
 import { AlertCircle } from 'lucide-react';
 
 export const ChatInterface = () => {
@@ -60,7 +59,9 @@ export const ChatInterface = () => {
         ))}
 
         {isLoading && (
-          <MessageSkeleton />
+          <div className="space-y-2">
+            <ProgressIndicator isVisible={isLoading} />
+          </div>
         )}
 
         {error && (

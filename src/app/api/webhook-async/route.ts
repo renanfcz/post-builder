@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { WEBHOOK_CONFIG } from '@/lib/constants'
 import { asyncOperationStore } from '@/lib/async-operations'
 
-// Configure route timeout to 60 seconds
-export const maxDuration = 60
+// Configure route timeout to 15 seconds (Netlify limit)
+export const maxDuration = 15
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -26,11 +26,31 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate operation ID
-    const operationId = `${body.conversation_id}-${Date.now()}`
+    const conversationId = body.conversation_id
+    console.log('🆔 [WEBHOOK-ASYNC] Processing conversation_id:', conversationId)
+
+    const webhookUrl = WEBHOOK_CONFIG.EXTERNAL_URL
+    console.log('🔗 [WEBHOOK-ASYNC] Calling external webhook:', webhookUrl)
     
-    // Store operation as pending
-    asyncOperationStore.set(operationId, {
+    // Call external webhook (should return 200 immediately)
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        secret: process.env.NEXT_PUBLIC_SECRET || '',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000), // 10 seconds timeout for initial call
+    })
+
+    if (!response.ok) {
+      throw new Error(`Webhook returned ${response.status}: ${response.statusText}`)
+    }
+
+    console.log('✅ [WEBHOOK-ASYNC] Webhook accepted request for conversation:', conversationId)
+    
+    // Store conversation as pending in our local store for polling
+    asyncOperationStore.set(conversationId, {
       status: 'pending',
       startTime: Date.now()
     })
@@ -38,25 +58,11 @@ export async function POST(request: NextRequest) {
     // Cleanup old operations
     asyncOperationStore.cleanup()
 
-    // Start async operation
-    processWebhookAsync(operationId, body).catch(error => {
-      console.error('❌ [WEBHOOK-ASYNC] Background processing failed:', error)
-      asyncOperationStore.set(operationId, {
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Erro interno',
-        startTime: Date.now()
-      })
-    })
-
-    console.log('🚀 [WEBHOOK-ASYNC] Operation started:', operationId)
+    console.log('🚀 [WEBHOOK-ASYNC] Conversation stored for polling:', conversationId)
     
-    // Return operation ID for polling
-    return NextResponse.json({
-      operation_id: operationId,
-      status: 'processing',
-      polling_url: `/api/webhook-status/${operationId}`,
-      estimated_time: '30-60 seconds'
-    }, {
+    // Return only HTTP 200 (no body)
+    return new NextResponse(null, {
+      status: 200,
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -83,62 +89,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function processWebhookAsync(operationId: string, body: any) {
-  const webhookUrl = WEBHOOK_CONFIG.EXTERNAL_URL
-  
-  console.log('🔗 [WEBHOOK-ASYNC] Calling external webhook:', webhookUrl)
-  
-  try {
-    // Use a longer timeout for the async version (2 minutes)
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 minutes
-    
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        secret: process.env.NEXT_PUBLIC_SECRET || '',
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    })
-
-    clearTimeout(timeoutId)
-
-    if (!response.ok) {
-      throw new Error(`Webhook returned ${response.status}: ${response.statusText}`)
-    }
-
-    const data = await response.json()
-    
-    // Process webhook response
-    const processedResponse = {
-      response: data.output || 'Resposta vazia do webhook',
-      post_content: null,
-      is_final_post: false,
-      suggestions: [],
-      status: 'completed' as const,
-    }
-    
-    // Store the result
-    asyncOperationStore.set(operationId, {
-      status: 'completed',
-      result: processedResponse,
-      startTime: Date.now()
-    })
-    
-    console.log('✅ [WEBHOOK-ASYNC] Operation completed:', operationId)
-    
-  } catch (error) {
-    console.error('❌ [WEBHOOK-ASYNC] Operation failed:', operationId, error)
-    
-    asyncOperationStore.set(operationId, {
-      status: 'error',
-      error: error instanceof Error ? error.message : 'Erro interno',
-      startTime: Date.now()
-    })
-  }
-}
 
 export async function OPTIONS() {
   return NextResponse.json({}, {

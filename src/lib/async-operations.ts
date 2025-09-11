@@ -10,7 +10,7 @@ interface AsyncOperation {
 
 class AsyncOperationStore {
   private operations = new Map<string, AsyncOperation>()
-
+  
   set(id: string, operation: AsyncOperation) {
     this.operations.set(id, operation)
   }
@@ -39,8 +39,13 @@ class AsyncOperationStore {
   }
 }
 
-// Singleton instance
-export const asyncOperationStore = new AsyncOperationStore()
+// True singleton instance that persists through hot reloads
+declare global {
+  var __asyncOperationStore: AsyncOperationStore | undefined
+}
+
+export const asyncOperationStore = 
+  globalThis.__asyncOperationStore ?? (globalThis.__asyncOperationStore = new AsyncOperationStore())
 
 // Export types for reuse
 export type { AsyncOperation }

@@ -9,6 +9,7 @@ export interface UseChatReturn extends ChatState {
   sendMessage: (content: string) => Promise<void>;
   clearChat: () => void;
   currentPost: string | null;
+  progressMessage: string | null;
 }
 
 export const useChat = (webhookUrl?: string): UseChatReturn => {
@@ -17,7 +18,7 @@ export const useChat = (webhookUrl?: string): UseChatReturn => {
   const [error, setError] = useState<string | null>(null);
   const [currentPost, setCurrentPost] = useState<string | null>(null);
   
-  const { sendMessage: sendWebhookMessage } = useWebhook(webhookUrl);
+  const { sendMessage: sendWebhookMessage, progressMessage } = useWebhook(webhookUrl);
   const conversationIdRef = useRef<string>(crypto.randomUUID());
 
   const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
@@ -103,5 +104,6 @@ export const useChat = (webhookUrl?: string): UseChatReturn => {
     currentPost,
     sendMessage,
     clearChat,
+    progressMessage,
   };
 };
