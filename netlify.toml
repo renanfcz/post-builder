@@ -1,15 +1,13 @@
 [build]
-  publish = ".next"
   command = "npm run build"
+  publish = ".next"
+
+# Essential Netlify plugin for Next.js
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
 
 [functions]
-  # Maximum timeout for Netlify Functions (10 seconds - default is 10, max is 15 for Pro plans)
   node_bundler = "esbuild"
-
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/api/:splat"
-  status = 200
 
 [build.environment]
   # Environment variables for async operations
