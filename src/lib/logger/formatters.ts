@@ -39,7 +39,7 @@ export const structuredFormat = winston.format.combine(
   winston.format.json(),
   winston.format.printf((info) => {
     const logEntry: LogEntry = {
-      timestamp: info.timestamp,
+      timestamp: info.timestamp as string,
       level: info.level as LogEntry['level'],
       category: (info.category as LogCategory) || LogCategory.API,
       message: info.message as string,
@@ -55,7 +55,7 @@ export const structuredFormat = winston.format.combine(
         ...logEntry.context,
         error: {
           message: error.message,
-          stack: error.stack,
+          stack: error.stack || '',
           name: error.name
         }
       };

@@ -26,7 +26,7 @@ export interface LogContext {
   method?: string;
   duration?: number;
   statusCode?: number | undefined;
-  error?: Error | string;
+  error?: Error | string | { message: string; stack: string; name: string };
   attempt?: number;
   pollCount?: number;
   elapsed?: number;

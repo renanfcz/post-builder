@@ -1,6 +1,6 @@
 import { WEBHOOK_CONFIG } from '../constants';
 import { ProcessedWebhookResponse, WebhookConfig, WebhookRequest } from '../types/webhook';
-import { logger, LogLevel } from '../logger';
+import { clientLogger as logger, LogLevel } from '../logger/client-logger';
 
 export class WebhookClient {
   private config: WebhookConfig;

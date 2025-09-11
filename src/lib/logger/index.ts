@@ -1,7 +1,16 @@
 import winston from 'winston';
-import DailyRotateFile from 'winston-daily-rotate-file';
 import { LogLevel, LogCategory, LogContext } from './types';
 import { structuredFormat, consoleFormat } from './formatters';
+
+// Conditional import for server-side only
+let DailyRotateFile: any = null;
+if (typeof window === 'undefined') {
+  try {
+    DailyRotateFile = require('winston-daily-rotate-file');
+  } catch (error) {
+    console.warn('winston-daily-rotate-file not available, file logging disabled');
+  }
+}
 
 class Logger {
   private winston: winston.Logger;
@@ -24,7 +33,7 @@ class Logger {
     }
 
     // File transport (production and when explicitly enabled)
-    if (!isDevelopment || process.env.ENABLE_FILE_LOGGING === 'true') {
+    if (DailyRotateFile && (!isDevelopment || process.env.ENABLE_FILE_LOGGING === 'true')) {
       // Error logs
       transports.push(
         new DailyRotateFile({
