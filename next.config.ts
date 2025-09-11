@@ -3,16 +3,18 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Performance optimizations
   experimental: {
-    turbo: {
-      rules: {
-        '*.svg': {
-          loaders: ['@svgr/webpack'],
-          as: '*.js',
-        },
-      },
-    },
     optimizePackageImports: ['lucide-react', '@radix-ui/react-slot'],
     webVitalsAttribution: ['CLS', 'LCP'],
+  },
+
+  // Turbopack configuration (migrated from experimental.turbo)
+  turbopack: {
+    rules: {
+      '*.svg': {
+        loaders: ['@svgr/webpack'],
+        as: '*.js',
+      },
+    },
   },
 
   // Compiler optimizations
