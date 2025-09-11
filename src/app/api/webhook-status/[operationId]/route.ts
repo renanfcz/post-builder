@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { asyncOperationStore } from '@/lib/async-operations'
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { operationId: string } }
+  _request: NextRequest,
+  { params }: { params: Promise<{ operationId: string }> }
 ) {
   try {
-    const { operationId } = params
+    const { operationId } = await params
     
     console.log('🔍 [WEBHOOK-STATUS] Checking status for:', operationId)
     

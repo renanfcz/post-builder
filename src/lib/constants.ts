@@ -1,6 +1,6 @@
 export const WEBHOOK_CONFIG = {
   // Use Next.js API route as proxy to avoid CORS issues
-  DEFAULT_URL: '/api/webhook',
+  DEFAULT_URL: '/api/webhook-async',
   EXTERNAL_URL: process.env.NEXT_PUBLIC_WEBHOOK_URL || 'http://localhost:3001/webhook',
   SECRET: process.env.NEXT_PUBLIC_SECRET || '',
   TIMEOUT: 120000, // 120 seconds
