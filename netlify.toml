@@ -3,8 +3,8 @@
   command = "npm run build"
 
 [functions]
-  # Maximum timeout for Netlify Functions (15 seconds)
-  timeout = 15
+  # Maximum timeout for Netlify Functions (10 seconds - default is 10, max is 15 for Pro plans)
+  node_bundler = "esbuild"
 
 [[redirects]]
   from = "/api/*"
