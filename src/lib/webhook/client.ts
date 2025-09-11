@@ -1,5 +1,6 @@
 import { WEBHOOK_CONFIG } from '../constants';
 import { ProcessedWebhookResponse, WebhookConfig, WebhookRequest } from '../types/webhook';
+import { logger, LogLevel } from '../logger';
 
 export class WebhookClient {
   private config: WebhookConfig;
@@ -34,9 +35,11 @@ export class WebhookClient {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
-        console.log(
-          `✅ [WEBHOOK-CLIENT] Webhook accepted request for conversation: ${request.conversation_id}`
-        );
+        logger.webhook(LogLevel.INFO, 'Webhook accepted request for conversation', {
+          conversationId: request.conversation_id,
+          attempt,
+          metadata: { url: this.config.url }
+        });
 
         // Start polling immediately using conversation_id
         return await this.pollForResult(request.conversation_id);
@@ -67,7 +70,13 @@ export class WebhookClient {
     let pollCount = 0;
     const pollInterval = 2 * 1000; // 10 seconds as requested
 
-    console.log(`🔄 [POLLING] Starting polling for conversation: ${conversationId}`);
+    logger.polling(LogLevel.INFO, 'Starting polling for conversation', {
+      conversationId,
+      metadata: { 
+        maxDuration: maxDuration / 1000, // in seconds
+        pollInterval: pollInterval / 1000 // in seconds
+      }
+    });
 
     while (Date.now() - startTime < maxDuration) {
       try {

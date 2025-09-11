@@ -1,37 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { WEBHOOK_CONFIG } from '@/lib/constants'
+import { logger, LogLevel } from '@/lib/logger'
+import { withLogging, extractRequestInfo, extractConversationId } from '@/lib/logger/middleware'
 
 // Configure route timeout to 15 seconds (Netlify limit)
 export const maxDuration = 15
 
-export async function POST(request: NextRequest) {
-  const startTime = Date.now()
+async function handleWebhookAsync(request: NextRequest) {
+  const timer = logger.timer()
+  const requestInfo = extractRequestInfo(request)
   
   try {
-    console.log('⏱️ [WEBHOOK-ASYNC] Request started at:', new Date().toISOString())
+    logger.webhook(LogLevel.INFO, 'Webhook async request started', {
+      ...requestInfo,
+      metadata: { timestamp: new Date().toISOString() }
+    })
     
     const body = await request.json()
-    console.log('📝 [WEBHOOK-ASYNC] Request body parsed:', { 
-      message: body.message?.substring(0, 50) + '...', 
-      conversation_id: body.conversation_id 
+    const conversationId = body.conversation_id
+    
+    logger.webhook(LogLevel.DEBUG, 'Request body parsed', {
+      ...requestInfo,
+      conversationId,
+      metadata: { 
+        messageLength: body.message?.length,
+        hasMessage: !!body.message,
+        hasConversationId: !!conversationId
+      }
     })
     
     // Validate request body
-    if (!body.message || !body.conversation_id) {
-      console.log('❌ [WEBHOOK-ASYNC] Validation failed - missing required fields')
+    if (!body.message || !conversationId) {
+      logger.webhook(LogLevel.ERROR, 'Validation failed - missing required fields', {
+        ...requestInfo,
+        conversationId,
+        metadata: { 
+          hasMessage: !!body.message,
+          hasConversationId: !!conversationId
+        }
+      })
+      
       return NextResponse.json(
         { error: 'Mensagem e conversation_id são obrigatórios' },
         { status: 400 }
       )
     }
 
-    const conversationId = body.conversation_id
-    console.log('🆔 [WEBHOOK-ASYNC] Processing conversation_id:', conversationId)
-
     const webhookUrl = WEBHOOK_CONFIG.EXTERNAL_URL
-    console.log('🔗 [WEBHOOK-ASYNC] Calling external webhook:', webhookUrl)
     
-    // Call external webhook (should return 200 immediately)
+    logger.webhook(LogLevel.INFO, 'Calling external webhook', {
+      ...requestInfo,
+      conversationId,
+      metadata: { 
+        webhookUrl,
+        messagePreview: body.message?.substring(0, 100)
+      }
+    })
+    
+    // Call external webhook with detailed logging
+    const webhookTimer = logger.timer()
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
@@ -39,15 +66,31 @@ export async function POST(request: NextRequest) {
         secret: process.env.NEXT_PUBLIC_SECRET || '',
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10000), // 10 seconds timeout for initial call
+      signal: AbortSignal.timeout(10000),
+    })
+
+    const webhookDuration = webhookTimer.end('External webhook call completed', {
+      conversationId,
+      statusCode: response.status,
+      metadata: { webhookUrl }
     })
 
     if (!response.ok) {
       throw new Error(`Webhook returned ${response.status}: ${response.statusText}`)
     }
 
-    console.log('✅ [WEBHOOK-ASYNC] Webhook accepted request for conversation:', conversationId)
-    console.log('🚀 [WEBHOOK-ASYNC] Backend will handle Redis storage and polling:', conversationId)
+    logger.webhook(LogLevel.INFO, 'Webhook accepted request successfully', {
+      ...requestInfo,
+      conversationId,
+      statusCode: response.status,
+      duration: webhookDuration,
+      metadata: { webhookUrl }
+    })
+    
+    timer.end('Webhook async request completed successfully', {
+      conversationId,
+      statusCode: 200
+    })
     
     // Return only HTTP 200 (no body)
     return new NextResponse(null, {
@@ -60,13 +103,27 @@ export async function POST(request: NextRequest) {
     })
     
   } catch (error) {
-    const totalTime = Date.now() - startTime
-    console.error('❌ [WEBHOOK-ASYNC] Failed after', totalTime, 'ms:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const totalDuration = timer.end('Webhook async request failed', {
+      error: errorMessage
+    })
+    
+    const conversationId = extractConversationId(request);
+    logger.webhook(LogLevel.ERROR, 'Webhook async request failed', {
+      ...requestInfo,
+      conversationId: conversationId || undefined,
+      error: error instanceof Error ? error : new Error(String(error)),
+      duration: totalDuration,
+      metadata: { 
+        webhookUrl: WEBHOOK_CONFIG.EXTERNAL_URL,
+        errorType: error instanceof Error ? error.name : 'Unknown'
+      }
+    })
     
     return NextResponse.json({
       response: 'Erro ao processar solicitação',
       status: 'error',
-      error: error instanceof Error ? error.message : 'Erro de conexão'
+      error: errorMessage
     }, { 
       status: 500,
       headers: {
@@ -77,6 +134,12 @@ export async function POST(request: NextRequest) {
     })
   }
 }
+
+export const POST = withLogging(handleWebhookAsync, {
+  includeBody: true,
+  includeHeaders: false,
+  maxBodyLength: 500
+})
 
 
 export async function OPTIONS() {
