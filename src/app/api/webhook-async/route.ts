@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { WEBHOOK_CONFIG } from '@/lib/constants'
-import { asyncOperationStore } from '@/lib/async-operations'
 
 // Configure route timeout to 15 seconds (Netlify limit)
 export const maxDuration = 15
@@ -48,17 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('✅ [WEBHOOK-ASYNC] Webhook accepted request for conversation:', conversationId)
-    
-    // Store conversation as pending in our local store for polling
-    asyncOperationStore.set(conversationId, {
-      status: 'pending',
-      startTime: Date.now()
-    })
-    
-    // Cleanup old operations
-    asyncOperationStore.cleanup()
-
-    console.log('🚀 [WEBHOOK-ASYNC] Conversation stored for polling:', conversationId)
+    console.log('🚀 [WEBHOOK-ASYNC] Backend will handle Redis storage and polling:', conversationId)
     
     // Return only HTTP 200 (no body)
     return new NextResponse(null, {

@@ -1,5 +1,5 @@
-import { WebhookRequest, ProcessedWebhookResponse, WebhookConfig } from '../types/webhook';
 import { WEBHOOK_CONFIG } from '../constants';
+import { ProcessedWebhookResponse, WebhookConfig, WebhookRequest } from '../types/webhook';
 
 export class WebhookClient {
   private config: WebhookConfig;
@@ -34,15 +34,16 @@ export class WebhookClient {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
-        console.log(`✅ [WEBHOOK-CLIENT] Webhook accepted request for conversation: ${request.conversation_id}`);
-        
+        console.log(
+          `✅ [WEBHOOK-CLIENT] Webhook accepted request for conversation: ${request.conversation_id}`
+        );
+
         // Start polling immediately using conversation_id
         return await this.pollForResult(request.conversation_id);
-
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         console.log(`❌ [WEBHOOK-CLIENT] Attempt ${attempt} failed:`, lastError.message);
-        
+
         if (attempt < this.config.retries!) {
           const backoffDelay = Math.pow(2, attempt) * 1000;
           console.log(`🔄 [WEBHOOK-CLIENT] Retrying in ${backoffDelay}ms...`);
@@ -64,64 +65,100 @@ export class WebhookClient {
     const maxDuration = 3 * 60 * 1000; // 3 minutes total
     const startTime = Date.now();
     let pollCount = 0;
-    
-    // Adaptive polling intervals: 1s -> 2s -> 3s -> 3s...
-    const getPollInterval = (count: number): number => {
-      if (count < 5) return 1000;      // First 5 polls: 1 second
-      if (count < 15) return 2000;     // Next 10 polls: 2 seconds  
-      return 3000;                     // Rest: 3 seconds
-    };
-    
+    const pollInterval = 2 * 1000; // 10 seconds as requested
+
+    console.log(`🔄 [POLLING] Starting polling for conversation: ${conversationId}`);
+
     while (Date.now() - startTime < maxDuration) {
       try {
-        const response = await fetch(`/api/webhook-status/${conversationId}`);
-        const data = await response.json();
-        
-        if (data.status === 'completed') {
+        // Poll external backend Redis
+        const pollUrl = process.env.NEXT_PUBLIC_BACKEND_POLL_URL;
+        if (!pollUrl) {
+          throw new Error('NEXT_PUBLIC_BACKEND_POLL_URL não configurado');
+        }
+        const checkUrl = `${pollUrl}?conversation_id=${conversationId}`;
+        const response = await fetch(checkUrl);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const responseText = await response.text();
+
+        // Try to parse as JSON first
+        let responseData;
+        try {
+          responseData = JSON.parse(responseText);
+        } catch {
+          // If not JSON, treat as plain text
+          responseData = responseText;
+        }
+
+        // Check if processing is complete
+        const isComplete =
+          (responseData && typeof responseData === 'string' && responseData.trim()) ||
+          (typeof responseData === 'object' &&
+            responseData.response !== null &&
+            responseData.response !== undefined);
+
+        if (isComplete) {
           console.log(`✅ [POLLING] Conversation completed after ${pollCount + 1} polls`);
+
+          // Clean up Redis key by calling DELETE endpoint
+          try {
+            const cleanupUrl = process.env.NEXT_PUBLIC_BACKEND_CLEANUP_URL;
+            if (!cleanupUrl) {
+              console.warn('⚠️ [CLEANUP] NEXT_PUBLIC_BACKEND_CLEANUP_URL não configurado');
+              return {
+                response: responseText.trim(),
+                status: 'completed',
+                conversation_id: conversationId,
+              };
+            }
+
+            await fetch(cleanupUrl, {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ conversation_id: conversationId }),
+            });
+            console.log(`🧹 [CLEANUP] Redis key cleaned for conversation: ${conversationId}`);
+          } catch (cleanupError) {
+            console.warn(`⚠️ [CLEANUP] Failed to clean Redis key:`, cleanupError);
+          }
+
+          // Extract the actual response message
+          const finalResponse =
+            typeof responseData === 'string' ? responseData.trim() : responseData.response;
+
           return {
-            response: data.response,
-            post_content: data.post_content,
-            is_final_post: data.is_final_post,
-            suggestions: data.suggestions || [],
+            response: finalResponse,
             status: 'completed',
             conversation_id: conversationId,
           };
         }
-        
-        if (data.status === 'error' || data.status === 'not_found' || data.status === 'expired') {
-          console.log(`❌ [POLLING] Conversation failed: ${data.status}`);
-          
-          // Provide more specific error messages
-          let errorMessage = 'Erro ao processar sua mensagem. Tente novamente.';
-          if (data.status === 'not_found') {
-            errorMessage = 'Conversa não encontrada. A sessão pode ter expirado.';
-          } else if (data.status === 'expired') {
-            errorMessage = 'Conversa expirou. Tente enviar a mensagem novamente.';
-          } else if (data.error?.includes('timeout')) {
-            errorMessage = 'O processamento está demorando mais que o esperado. Tente novamente com uma mensagem mais simples.';
-          }
-          
-          return {
-            response: errorMessage,
-            status: 'error',
-            error: data.error || 'Conversa falhou',
-            conversation_id: conversationId,
-          };
-        }
-        
-        // Still pending - log progress and continue
+
+        // Response indicates still processing (null response or empty)
         const elapsed = Date.now() - startTime;
-        console.log(`🔄 [POLLING] Poll ${pollCount + 1}, elapsed: ${Math.round(elapsed/1000)}s`);
-        
+        const statusMessage =
+          typeof responseData === 'object' && responseData.response === null
+            ? 'response: null - still processing...'
+            : 'empty response - still processing...';
+        console.log(
+          `🔄 [POLLING] Poll ${pollCount + 1}, elapsed: ${Math.round(elapsed / 1000)}s - ${statusMessage}`
+        );
+
         pollCount++;
-        const pollInterval = getPollInterval(pollCount);
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
-        
+
+        // Wait 10 seconds before next poll
+        if (Date.now() - startTime < maxDuration) {
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
+        }
       } catch (error) {
         console.error(`❌ [POLLING] Error on poll ${pollCount + 1}:`, error);
         pollCount++;
-        
+
         // If we've exhausted time, return error
         if (Date.now() - startTime >= maxDuration) {
           return {
@@ -130,12 +167,12 @@ export class WebhookClient {
             error: error instanceof Error ? error.message : 'Erro de polling',
           };
         }
-        
+
         // Otherwise, wait and retry
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
       }
     }
-    
+
     // Timeout reached
     console.log(`⏰ [POLLING] Timeout after ${pollCount} polls`);
     return {
